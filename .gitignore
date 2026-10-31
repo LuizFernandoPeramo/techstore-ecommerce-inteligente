@@ -1,0 +1,13 @@
+
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.vscode/
+.DS_Store
+
+backup_refatoracao/
+schemas_pedidos.py

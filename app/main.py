@@ -1,0 +1,35 @@
+
+from fastapi import FastAPI
+
+from app.routers.produtos import router as produtos_router
+from app.routers.clientes import router as clientes_router
+from app.routers.pedidos import router as pedidos_router
+
+
+app = FastAPI(
+    title="TechStore API",
+    description="API do e-commerce inteligente TechStore",
+    version="1.0.0"
+)
+
+
+app.include_router(produtos_router)
+app.include_router(clientes_router)
+app.include_router(pedidos_router)
+
+
+@app.get("/", tags=["Sistema"])
+def inicio():
+    return {
+        "sistema": "TechStore",
+        "mensagem": "Bem-vindo à API da TechStore!",
+        "status": "online"
+    }
+
+
+@app.get("/saude", tags=["Sistema"])
+def verificar_saude():
+    return {
+        "status": "ok",
+        "servico": "TechStore API"
+    }
