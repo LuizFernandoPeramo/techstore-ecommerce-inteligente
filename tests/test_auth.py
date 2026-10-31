@@ -166,8 +166,19 @@ def test_login_cliente_sem_senha(client, banco_limpo):
 def test_login_cliente_inativo(client, banco_limpo):
     cliente = cadastrar_cliente(client)
 
+    resposta_login = fazer_login(
+        client,
+        cliente["email"],
+        SENHA_VALIDA
+    )
+
+    assert resposta_login.status_code == 200
+
+    token = resposta_login.json()["access_token"]
+
     resposta_exclusao = client.delete(
-        f"/clientes/{cliente['id']}"
+        f"/clientes/{cliente['id']}",
+        headers={"Authorization": f"Bearer {token}"}
     )
 
     assert resposta_exclusao.status_code == 200
@@ -316,7 +327,8 @@ def test_me_cliente_desativado_apos_login(
     token = resposta_login.json()["access_token"]
 
     resposta_exclusao = client.delete(
-        f"/clientes/{cliente['id']}"
+        f"/clientes/{cliente['id']}",
+        headers={"Authorization": f"Bearer {token}"}
     )
 
     assert resposta_exclusao.status_code == 200
@@ -348,6 +360,16 @@ def test_atualizacao_sem_senha_preserva_hash(
             {"cliente_id": cliente["id"]}
         ).scalar_one()
 
+    resposta_login_inicial = fazer_login(
+        client,
+        cliente["email"],
+        SENHA_VALIDA
+    )
+
+    assert resposta_login_inicial.status_code == 200
+
+    token = resposta_login_inicial.json()["access_token"]
+
     resposta = client.put(
         f"/clientes/{cliente['id']}",
         json={
@@ -355,7 +377,8 @@ def test_atualizacao_sem_senha_preserva_hash(
             "email": cliente["email"],
             "telefone": "11988887777",
             "cpf": "00000000001"
-        }
+        },
+        headers={"Authorization": f"Bearer {token}"}
     )
 
     assert resposta.status_code == 200, resposta.text
@@ -389,6 +412,16 @@ def test_atualizacao_com_nova_senha(
 
     nova_senha = "NovaSenha@2026"
 
+    resposta_login_inicial = fazer_login(
+        client,
+        cliente["email"],
+        SENHA_VALIDA
+    )
+
+    assert resposta_login_inicial.status_code == 200
+
+    token = resposta_login_inicial.json()["access_token"]
+
     resposta = client.put(
         f"/clientes/{cliente['id']}",
         json={
@@ -397,7 +430,8 @@ def test_atualizacao_com_nova_senha(
             "telefone": "11999998888",
             "cpf": "00000000001",
             "senha": nova_senha
-        }
+        },
+        headers={"Authorization": f"Bearer {token}"}
     )
 
     assert resposta.status_code == 200, resposta.text

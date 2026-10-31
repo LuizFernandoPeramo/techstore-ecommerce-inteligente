@@ -127,3 +127,25 @@ def client(test_engine, monkeypatch):
 
     with TestClient(app) as cliente:
         yield cliente
+
+
+@pytest.fixture
+def cliente_autenticado(client):
+    def autenticar(email, senha):
+        resposta = client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "senha": senha
+            }
+        )
+
+        assert resposta.status_code == 200, resposta.text
+
+        token = resposta.json()["access_token"]
+
+        return {
+            "Authorization": f"Bearer {token}"
+        }
+
+    return autenticar

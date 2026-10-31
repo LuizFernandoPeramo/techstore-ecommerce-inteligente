@@ -2,6 +2,9 @@
 from sqlalchemy import text
 
 
+SENHA_TESTE = "TechStore@2026"
+
+
 def test_cadastrar_cliente(client, test_engine, banco_limpo):
     novo_cliente = {
         "nome": "Mariana Oliveira",
@@ -81,12 +84,18 @@ def test_consultar_cliente_inexistente(client, banco_limpo):
     assert resposta.json()["detail"] == "Cliente nao encontrado"
 
 
-def test_atualizar_cliente(client, test_engine, banco_limpo):
+def test_atualizar_cliente(
+    client,
+    test_engine,
+    banco_limpo,
+    cliente_autenticado
+):
     novo_cliente = {
         "nome": "Ana Souza",
         "email": "ana.souza@exemplo.com",
         "telefone": "11988887777",
-        "cpf": "11122233344"
+        "cpf": "11122233344",
+        "senha": SENHA_TESTE
     }
 
     resposta_cadastro = client.post("/clientes", json=novo_cliente)
@@ -94,6 +103,11 @@ def test_atualizar_cliente(client, test_engine, banco_limpo):
     assert resposta_cadastro.status_code == 201
 
     cliente_id = resposta_cadastro.json()["id"]
+
+    headers = cliente_autenticado(
+        novo_cliente["email"],
+        SENHA_TESTE
+    )
 
     cliente_atualizado = {
         "nome": "Ana Paula Souza",
@@ -104,7 +118,8 @@ def test_atualizar_cliente(client, test_engine, banco_limpo):
 
     resposta_atualizacao = client.put(
         f"/clientes/{cliente_id}",
-        json=cliente_atualizado
+        json=cliente_atualizado,
+        headers=headers
     )
 
     assert resposta_atualizacao.status_code == 200
@@ -138,12 +153,18 @@ def test_atualizar_cliente(client, test_engine, banco_limpo):
     assert cliente_banco["ativo"] is True
 
 
-def test_exclusao_logica_cliente(client, test_engine, banco_limpo):
+def test_exclusao_logica_cliente(
+    client,
+    test_engine,
+    banco_limpo,
+    cliente_autenticado
+):
     novo_cliente = {
         "nome": "Roberto Almeida",
         "email": "roberto.almeida@exemplo.com",
         "telefone": "11966665555",
-        "cpf": "55566677788"
+        "cpf": "55566677788",
+        "senha": SENHA_TESTE
     }
 
     resposta_cadastro = client.post("/clientes", json=novo_cliente)
@@ -152,7 +173,15 @@ def test_exclusao_logica_cliente(client, test_engine, banco_limpo):
 
     cliente_id = resposta_cadastro.json()["id"]
 
-    resposta_exclusao = client.delete(f"/clientes/{cliente_id}")
+    headers = cliente_autenticado(
+        novo_cliente["email"],
+        SENHA_TESTE
+    )
+
+    resposta_exclusao = client.delete(
+        f"/clientes/{cliente_id}",
+        headers=headers
+    )
 
     assert resposta_exclusao.status_code == 200
 
@@ -184,6 +213,9 @@ def test_exclusao_logica_cliente(client, test_engine, banco_limpo):
 
     assert resposta_consulta.status_code == 404
 
-    resposta_nova_exclusao = client.delete(f"/clientes/{cliente_id}")
+    resposta_nova_exclusao = client.delete(
+        f"/clientes/{cliente_id}",
+        headers=headers
+    )
 
-    assert resposta_nova_exclusao.status_code == 404
+    assert resposta_nova_exclusao.status_code == 401
