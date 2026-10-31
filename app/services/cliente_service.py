@@ -4,24 +4,32 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.core.database import engine
+from app.core.security import gerar_hash_senha
 from app.schemas.cliente import ClienteCadastro
 
 
 def cadastrar_cliente(cliente: ClienteCadastro):
+    dados = cliente.model_dump(exclude={"senha"})
+    dados["senha_hash"] = (
+        gerar_hash_senha(cliente.senha)
+        if cliente.senha is not None
+        else None
+    )
+
     try:
         with engine.begin() as conexao:
             resultado = conexao.execute(
                 text("""
                     INSERT INTO clientes (
-                        nome, email, telefone, cpf
+                        nome, email, telefone, cpf, senha_hash
                     )
                     VALUES (
-                        :nome, :email, :telefone, :cpf
+                        :nome, :email, :telefone, :cpf, :senha_hash
                     )
                     RETURNING
                         id, nome, email, telefone, cpf, ativo
                 """),
-                cliente.model_dump()
+                dados
             )
 
             return dict(resultado.mappings().one())
@@ -96,6 +104,14 @@ def consultar_cliente(cliente_id: int):
 
 
 def atualizar_cliente(cliente_id: int, cliente: ClienteCadastro):
+    dados = cliente.model_dump(exclude={"senha"})
+    dados["cliente_id"] = cliente_id
+    dados["senha_hash"] = (
+        gerar_hash_senha(cliente.senha)
+        if cliente.senha is not None
+        else None
+    )
+
     try:
         with engine.begin() as conexao:
             resultado = conexao.execute(
@@ -106,16 +122,17 @@ def atualizar_cliente(cliente_id: int, cliente: ClienteCadastro):
                         email = :email,
                         telefone = :telefone,
                         cpf = :cpf,
+                        senha_hash = COALESCE(
+                            :senha_hash,
+                            senha_hash
+                        ),
                         atualizado_em = CURRENT_TIMESTAMP
                     WHERE id = :cliente_id
                       AND ativo = TRUE
                     RETURNING
                         id, nome, email, telefone, cpf, ativo
                 """),
-                {
-                    **cliente.model_dump(),
-                    "cliente_id": cliente_id
-                }
+                dados
             )
 
             cliente_atualizado = resultado.mappings().first()

@@ -97,6 +97,7 @@ def client(test_engine, monkeypatch):
     import app.services.produto_service as produto_service
     import app.services.cliente_service as cliente_service
     import app.services.pedido_service as pedido_service
+    import app.services.auth_service as auth_service
 
     monkeypatch.setattr(
         produto_service,
@@ -112,6 +113,12 @@ def client(test_engine, monkeypatch):
 
     monkeypatch.setattr(
         pedido_service,
+        "engine",
+        test_engine
+    )
+
+    monkeypatch.setattr(
+        auth_service,
         "engine",
         test_engine
     )

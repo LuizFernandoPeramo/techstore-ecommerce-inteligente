@@ -13,6 +13,11 @@ class ClienteCadastro(BaseModel):
         default=None,
         pattern=r"^[0-9]{11}$"
     )
+    senha: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=128
+    )
 
 
 class Cliente(BaseModel):
