@@ -1,13 +1,56 @@
-
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import text
+
+
+@pytest.fixture
+def headers_admin_pedidos(client, test_engine, banco_limpo):
+    senha = "TechStore@2026"
+    email = "admin.pedidos@exemplo.com"
+
+    resposta = client.post(
+        "/clientes",
+        json={
+            "nome": "Administrador de Testes",
+            "email": email,
+            "telefone": "11999998888",
+            "cpf": "99999999999",
+            "senha": senha
+        }
+    )
+    assert resposta.status_code == 201, resposta.text
+    admin_id = resposta.json()["id"]
+
+    with test_engine.begin() as conexao:
+        banco = conexao.execute(text("SELECT current_database()")).scalar_one()
+        if banco != "techstore_test_db":
+            raise RuntimeError("Banco de testes incorreto")
+        resultado = conexao.execute(
+            text("""
+                UPDATE clientes
+                SET perfil = 'admin'
+                WHERE id = :cliente_id AND perfil = 'cliente'
+                RETURNING id
+            """),
+            {"cliente_id": admin_id}
+        )
+        assert resultado.scalar_one() == admin_id
+
+    login = client.post(
+        "/auth/login",
+        json={"email": email, "senha": senha}
+    )
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_cadastrar_pedido_e_atualizar_estoque(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_pedidos
 ):
     resposta_cliente = client.post(
         "/clientes",
@@ -29,7 +72,8 @@ def test_cadastrar_pedido_e_atualizar_estoque(
             "categoria": "Perifericos",
             "preco": "89.90",
             "estoque": 20
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     resposta_produto_2 = client.post(
@@ -39,7 +83,8 @@ def test_cadastrar_pedido_e_atualizar_estoque(
             "categoria": "Perifericos",
             "preco": "199.90",
             "estoque": 15
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_produto_1.status_code == 201
@@ -157,7 +202,8 @@ def test_cadastrar_pedido_e_atualizar_estoque(
 def test_pedido_com_estoque_insuficiente(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_pedidos
 ):
     resposta_cliente = client.post(
         "/clientes",
@@ -179,7 +225,8 @@ def test_pedido_com_estoque_insuficiente(
             "categoria": "Monitores",
             "preco": "899.90",
             "estoque": 3
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_produto.status_code == 201
@@ -290,7 +337,8 @@ def test_pedido_com_produto_inexistente(
 def test_pedido_com_produto_inativo(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_pedidos
 ):
     resposta_cliente = client.post(
         "/clientes",
@@ -312,14 +360,16 @@ def test_pedido_com_produto_inativo(
             "categoria": "Acessorios",
             "preco": "159.90",
             "estoque": 10
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_produto.status_code == 201
     produto_id = resposta_produto.json()["id"]
 
     resposta_exclusao = client.delete(
-        f"/produtos/{produto_id}"
+        f"/produtos/{produto_id}",
+        headers=headers_admin_pedidos
     )
 
     assert resposta_exclusao.status_code == 200
@@ -369,7 +419,8 @@ def test_pedido_com_produto_inativo(
 def test_pedido_com_cliente_inexistente(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_pedidos
 ):
     resposta_produto = client.post(
         "/produtos",
@@ -378,7 +429,8 @@ def test_pedido_com_cliente_inexistente(
             "categoria": "Perifericos",
             "preco": "79.90",
             "estoque": 10
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_produto.status_code == 201
@@ -430,7 +482,8 @@ def test_pedido_com_cliente_inativo(
     client,
     test_engine,
     banco_limpo,
-    cliente_autenticado
+    cliente_autenticado,
+    headers_admin_pedidos
 ):
     senha = "TechStore@2026"
     email = "paulo.roberto@exemplo.com"
@@ -458,7 +511,8 @@ def test_pedido_com_cliente_inativo(
             "categoria": "Perifericos",
             "preco": "99.90",
             "estoque": 8
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_produto.status_code == 201

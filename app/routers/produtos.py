@@ -1,6 +1,7 @@
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
+from app.core.permissions import exigir_administrador
 from app.schemas.produto import Produto, ProdutoCadastro
 from app.services import produto_service
 
@@ -26,12 +27,19 @@ def consultar_produto(produto_id: int):
     response_model=Produto,
     status_code=status.HTTP_201_CREATED
 )
-def cadastrar_produto(produto: ProdutoCadastro):
+def cadastrar_produto(
+    produto: ProdutoCadastro,
+    administrador: dict = Depends(exigir_administrador)
+):
     return produto_service.cadastrar_produto(produto)
 
 
 @router.put("/{produto_id}", response_model=Produto)
-def atualizar_produto(produto_id: int, produto: ProdutoCadastro):
+def atualizar_produto(
+    produto_id: int,
+    produto: ProdutoCadastro,
+    administrador: dict = Depends(exigir_administrador)
+):
     return produto_service.atualizar_produto(
         produto_id,
         produto
@@ -39,5 +47,8 @@ def atualizar_produto(produto_id: int, produto: ProdutoCadastro):
 
 
 @router.delete("/{produto_id}")
-def excluir_produto(produto_id: int):
+def excluir_produto(
+    produto_id: int,
+    administrador: dict = Depends(exigir_administrador)
+):
     return produto_service.excluir_produto(produto_id)

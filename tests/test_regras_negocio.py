@@ -1,8 +1,48 @@
-
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
+
+
+@pytest.fixture
+def headers_admin_regras(client, test_engine, banco_limpo):
+    senha = "TechStore@2026"
+    email = "admin.regras@exemplo.com"
+
+    resposta = client.post(
+        "/clientes",
+        json={
+            "nome": "Administrador Regras",
+            "email": email,
+            "telefone": "11999998888",
+            "cpf": "99999999999",
+            "senha": senha
+        }
+    )
+    assert resposta.status_code == 201, resposta.text
+    administrador_id = resposta.json()["id"]
+
+    with test_engine.begin() as conexao:
+        banco = conexao.execute(text("SELECT current_database()" )).scalar_one()
+        if banco != "techstore_test_db":
+            raise RuntimeError("Banco de testes incorreto")
+        atualizado = conexao.execute(
+            text("""
+                UPDATE clientes
+                SET perfil = 'admin'
+                WHERE id = :cliente_id AND perfil = 'cliente'
+                RETURNING id
+            """),
+            {"cliente_id": administrador_id}
+        ).scalar_one()
+        assert atualizado == administrador_id
+
+    login = client.post(
+        "/auth/login",
+        json={"email": email, "senha": senha}
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
 def criar_cliente(client, numero=1):
@@ -20,7 +60,7 @@ def criar_cliente(client, numero=1):
     return resposta.json()["id"]
 
 
-def criar_produto(client, numero=1, estoque=10):
+def criar_produto(client, headers_admin_regras, numero=1, estoque=10):
     resposta = client.post(
         "/produtos",
         json={
@@ -28,7 +68,8 @@ def criar_produto(client, numero=1, estoque=10):
             "categoria": "Informatica",
             "preco": "150.00",
             "estoque": estoque
-        }
+        },
+        headers=headers_admin_regras
     )
 
     assert resposta.status_code == 201
@@ -140,10 +181,11 @@ def test_validacao_dados_cliente(
 def test_pedido_com_produto_duplicado(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_regras
 ):
     cliente_id = criar_cliente(client)
-    produto_id = criar_produto(client, estoque=10)
+    produto_id = criar_produto(client, headers_admin_regras, estoque=10)
 
     resposta = client.post(
         "/pedidos",
@@ -222,10 +264,11 @@ def test_validacao_dados_pedido(
 def test_cancelamento_pedido_pago_devolve_estoque(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_regras
 ):
     cliente_id = criar_cliente(client)
-    produto_id = criar_produto(client, estoque=10)
+    produto_id = criar_produto(client, headers_admin_regras, estoque=10)
 
     resposta_pedido = criar_pedido(
         client,
@@ -259,10 +302,11 @@ def test_cancelamento_pedido_pago_devolve_estoque(
 def test_pedido_enviado_nao_pode_ser_cancelado(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_regras
 ):
     cliente_id = criar_cliente(client)
-    produto_id = criar_produto(client, estoque=10)
+    produto_id = criar_produto(client, headers_admin_regras, estoque=10)
 
     resposta_pedido = criar_pedido(
         client,
@@ -307,10 +351,11 @@ def test_status_pedido_inexistente(client, banco_limpo):
 def test_pedido_cancelado_nao_pode_ser_reativado(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_regras
 ):
     cliente_id = criar_cliente(client)
-    produto_id = criar_produto(client, estoque=5)
+    produto_id = criar_produto(client, headers_admin_regras, estoque=5)
 
     resposta_pedido = criar_pedido(
         client,
@@ -341,12 +386,13 @@ def test_pedido_cancelado_nao_pode_ser_reativado(
 def test_total_pedido_com_multiplos_produtos(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_regras
 ):
     cliente_id = criar_cliente(client)
 
-    produto_1 = criar_produto(client, numero=1, estoque=10)
-    produto_2 = criar_produto(client, numero=2, estoque=10)
+    produto_1 = criar_produto(client, headers_admin_regras, numero=1, estoque=10)
+    produto_2 = criar_produto(client, headers_admin_regras, numero=2, estoque=10)
 
     resposta = client.post(
         "/pedidos",
@@ -374,10 +420,11 @@ def test_total_pedido_com_multiplos_produtos(
 
 def test_exclusao_logica_preserva_historico_pedido(
     client,
-    banco_limpo
+    banco_limpo,
+    headers_admin_regras
 ):
     cliente_id = criar_cliente(client)
-    produto_id = criar_produto(client)
+    produto_id = criar_produto(client, headers_admin_regras)
 
     resposta_pedido = criar_pedido(
         client,
@@ -389,7 +436,8 @@ def test_exclusao_logica_preserva_historico_pedido(
     pedido_id = resposta_pedido.json()["id"]
 
     resposta_exclusao = client.delete(
-        f"/produtos/{produto_id}"
+        f"/produtos/{produto_id}",
+        headers=headers_admin_regras
     )
 
     assert resposta_exclusao.status_code == 200
