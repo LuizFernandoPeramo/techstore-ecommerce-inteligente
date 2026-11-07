@@ -29,67 +29,56 @@ def test_engine():
         pool_pre_ping=True
     )
 
-    with engine.connect() as conexao:
+    try:
+        with engine.connect() as conexao:
+            banco_atual = conexao.execute(
+                text("SELECT current_database()")
+            ).scalar_one()
+
+            if banco_atual != BANCO_TESTES:
+                raise RuntimeError(
+                    "Os testes nao estao conectados ao banco correto!"
+                )
+
+        yield engine
+
+    finally:
+        engine.dispose()
+
+
+def limpar_banco_testes(test_engine):
+    with test_engine.begin() as conexao:
         banco_atual = conexao.execute(
             text("SELECT current_database()")
         ).scalar_one()
 
         if banco_atual != BANCO_TESTES:
-            engine.dispose()
             raise RuntimeError(
-                "Os testes nao estao conectados ao banco correto!"
+                "Limpeza bloqueada: banco de dados incorreto!"
             )
 
-    yield engine
-
-    engine.dispose()
+        conexao.execute(
+            text("""
+                TRUNCATE TABLE
+                    itens_carrinho,
+                    carrinhos,
+                    itens_pedido,
+                    pedidos,
+                    produtos,
+                    clientes
+                RESTART IDENTITY CASCADE
+            """)
+        )
 
 
 @pytest.fixture
 def banco_limpo(test_engine):
-    with test_engine.begin() as conexao:
-        banco_atual = conexao.execute(
-            text("SELECT current_database()")
-        ).scalar_one()
+    limpar_banco_testes(test_engine)
 
-        if banco_atual != BANCO_TESTES:
-            raise RuntimeError(
-                "Limpeza bloqueada: banco de dados incorreto!"
-            )
-
-        conexao.execute(
-            text("""
-                TRUNCATE TABLE
-                    itens_pedido,
-                    pedidos,
-                    produtos,
-                    clientes
-                RESTART IDENTITY CASCADE
-            """)
-        )
-
-    yield
-
-    with test_engine.begin() as conexao:
-        banco_atual = conexao.execute(
-            text("SELECT current_database()")
-        ).scalar_one()
-
-        if banco_atual != BANCO_TESTES:
-            raise RuntimeError(
-                "Limpeza bloqueada: banco de dados incorreto!"
-            )
-
-        conexao.execute(
-            text("""
-                TRUNCATE TABLE
-                    itens_pedido,
-                    pedidos,
-                    produtos,
-                    clientes
-                RESTART IDENTITY CASCADE
-            """)
-        )
+    try:
+        yield
+    finally:
+        limpar_banco_testes(test_engine)
 
 
 @pytest.fixture
@@ -98,6 +87,7 @@ def client(test_engine, monkeypatch):
     import app.services.cliente_service as cliente_service
     import app.services.pedido_service as pedido_service
     import app.services.auth_service as auth_service
+    import app.services.carrinho_service as carrinho_service
 
     monkeypatch.setattr(
         produto_service,
@@ -119,6 +109,12 @@ def client(test_engine, monkeypatch):
 
     monkeypatch.setattr(
         auth_service,
+        "engine",
+        test_engine
+    )
+
+    monkeypatch.setattr(
+        carrinho_service,
         "engine",
         test_engine
     )

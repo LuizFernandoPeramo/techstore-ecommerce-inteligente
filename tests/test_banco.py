@@ -31,7 +31,9 @@ def test_tabelas_banco_testes(test_engine):
         ]
 
         tabelas_esperadas = [
+            "carrinhos",
             "clientes",
+            "itens_carrinho",
             "itens_pedido",
             "pedidos",
             "produtos"
