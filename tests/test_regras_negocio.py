@@ -76,7 +76,7 @@ def criar_produto(client, headers_admin_regras, numero=1, estoque=10):
     return resposta.json()["id"]
 
 
-def criar_pedido(client, cliente_id, produto_id, quantidade=1):
+def criar_pedido(client, cliente_id, produto_id, headers_admin_regras, quantidade=1):
     return client.post(
         "/pedidos",
         json={
@@ -87,7 +87,8 @@ def criar_pedido(client, cliente_id, produto_id, quantidade=1):
                     "quantidade": quantidade
                 }
             ]
-        }
+        },
+        headers=headers_admin_regras
     )
 
 
@@ -201,8 +202,7 @@ def test_pedido_com_produto_duplicado(
                     "quantidade": 3
                 }
             ]
-        }
-    )
+        }, headers=headers_admin_regras)
 
     assert resposta.status_code == 422
     assert consultar_estoque(test_engine, produto_id) == 10
@@ -251,12 +251,10 @@ def test_pedido_com_produto_duplicado(
 def test_validacao_dados_pedido(
     client,
     banco_limpo,
-    pedido_invalido
-):
+    pedido_invalido, headers_admin_regras):
     resposta = client.post(
         "/pedidos",
-        json=pedido_invalido
-    )
+        json=pedido_invalido, headers=headers_admin_regras)
 
     assert resposta.status_code == 422
 
@@ -274,6 +272,7 @@ def test_cancelamento_pedido_pago_devolve_estoque(
         client,
         cliente_id,
         produto_id,
+        headers_admin_regras,
         quantidade=4
     )
 
@@ -284,15 +283,13 @@ def test_cancelamento_pedido_pago_devolve_estoque(
 
     resposta_pagamento = client.patch(
         f"/pedidos/{pedido_id}/status",
-        json={"status": "pago"}
-    )
+        json={"status": "pago"}, headers=headers_admin_regras)
 
     assert resposta_pagamento.status_code == 200
 
     resposta_cancelamento = client.patch(
         f"/pedidos/{pedido_id}/status",
-        json={"status": "cancelado"}
-    )
+        json={"status": "cancelado"}, headers=headers_admin_regras)
 
     assert resposta_cancelamento.status_code == 200
     assert resposta_cancelamento.json()["status"] == "cancelado"
@@ -312,6 +309,7 @@ def test_pedido_enviado_nao_pode_ser_cancelado(
         client,
         cliente_id,
         produto_id,
+        headers_admin_regras,
         quantidade=2
     )
 
@@ -321,29 +319,26 @@ def test_pedido_enviado_nao_pode_ser_cancelado(
     for status in ["pago", "enviado"]:
         resposta = client.patch(
             f"/pedidos/{pedido_id}/status",
-            json={"status": status}
-        )
+            json={"status": status}, headers=headers_admin_regras)
         assert resposta.status_code == 200
 
     resposta_cancelamento = client.patch(
         f"/pedidos/{pedido_id}/status",
-        json={"status": "cancelado"}
-    )
+        json={"status": "cancelado"}, headers=headers_admin_regras)
 
     assert resposta_cancelamento.status_code == 409
     assert consultar_estoque(test_engine, produto_id) == 8
 
-    resposta_consulta = client.get(f"/pedidos/{pedido_id}")
+    resposta_consulta = client.get(f"/pedidos/{pedido_id}", headers=headers_admin_regras)
 
     assert resposta_consulta.status_code == 200
     assert resposta_consulta.json()["status"] == "enviado"
 
 
-def test_status_pedido_inexistente(client, banco_limpo):
+def test_status_pedido_inexistente(client, banco_limpo, headers_admin_regras):
     resposta = client.patch(
         "/pedidos/99999/status",
-        json={"status": "pago"}
-    )
+        json={"status": "pago"}, headers=headers_admin_regras)
 
     assert resposta.status_code == 404
 
@@ -361,6 +356,7 @@ def test_pedido_cancelado_nao_pode_ser_reativado(
         client,
         cliente_id,
         produto_id,
+        headers_admin_regras,
         quantidade=2
     )
 
@@ -369,15 +365,13 @@ def test_pedido_cancelado_nao_pode_ser_reativado(
 
     resposta_cancelamento = client.patch(
         f"/pedidos/{pedido_id}/status",
-        json={"status": "cancelado"}
-    )
+        json={"status": "cancelado"}, headers=headers_admin_regras)
 
     assert resposta_cancelamento.status_code == 200
 
     resposta_reativacao = client.patch(
         f"/pedidos/{pedido_id}/status",
-        json={"status": "pago"}
-    )
+        json={"status": "pago"}, headers=headers_admin_regras)
 
     assert resposta_reativacao.status_code == 409
     assert consultar_estoque(test_engine, produto_id) == 5
@@ -408,8 +402,7 @@ def test_total_pedido_com_multiplos_produtos(
                     "quantidade": 3
                 }
             ]
-        }
-    )
+        }, headers=headers_admin_regras)
 
     assert resposta.status_code == 201
     assert Decimal(str(resposta.json()["valor_total"])) == Decimal("750.00")
@@ -429,7 +422,8 @@ def test_exclusao_logica_preserva_historico_pedido(
     resposta_pedido = criar_pedido(
         client,
         cliente_id,
-        produto_id
+        produto_id,
+        headers_admin_regras
     )
 
     assert resposta_pedido.status_code == 201
@@ -443,8 +437,7 @@ def test_exclusao_logica_preserva_historico_pedido(
     assert resposta_exclusao.status_code == 200
 
     resposta_consulta = client.get(
-        f"/pedidos/{pedido_id}"
-    )
+        f"/pedidos/{pedido_id}", headers=headers_admin_regras)
 
     assert resposta_consulta.status_code == 200
     assert resposta_consulta.json()["id"] == pedido_id

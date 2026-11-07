@@ -107,7 +107,8 @@ def test_cadastrar_pedido_e_atualizar_estoque(
                     "quantidade": 1
                 }
             ]
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_pedido.status_code == 201
@@ -242,7 +243,8 @@ def test_pedido_com_estoque_insuficiente(
                     "quantidade": 5
                 }
             ]
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_pedido.status_code == 409
@@ -285,7 +287,8 @@ def test_pedido_com_estoque_insuficiente(
 def test_pedido_com_produto_inexistente(
     client,
     test_engine,
-    banco_limpo
+    banco_limpo,
+    headers_admin_pedidos
 ):
     resposta_cliente = client.post(
         "/clientes",
@@ -312,7 +315,8 @@ def test_pedido_com_produto_inexistente(
                     "quantidade": 1
                 }
             ]
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_pedido.status_code == 404
@@ -384,7 +388,8 @@ def test_pedido_com_produto_inativo(
                     "quantidade": 2
                 }
             ]
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_pedido.status_code == 404
@@ -446,7 +451,8 @@ def test_pedido_com_cliente_inexistente(
                     "quantidade": 2
                 }
             ]
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_pedido.status_code == 404
@@ -535,7 +541,8 @@ def test_pedido_com_cliente_inativo(
                     "quantidade": 3
                 }
             ]
-        }
+        },
+        headers=headers_admin_pedidos
     )
 
     assert resposta_pedido.status_code == 404

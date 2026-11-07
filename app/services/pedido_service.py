@@ -175,9 +175,11 @@ def cadastrar_pedido(pedido: PedidoCadastro):
         )
 
 
-def listar_pedidos():
+def listar_pedidos(cliente_autenticado: dict):
     try:
         with engine.connect() as conexao:
+            administrador = cliente_autenticado["perfil"] == "admin"
+
             resultado = conexao.execute(
                 text("""
                     SELECT
@@ -190,8 +192,13 @@ def listar_pedidos():
                     FROM pedidos p
                     INNER JOIN clientes c
                         ON c.id = p.cliente_id
+                    WHERE (:administrador OR p.cliente_id = :cliente_id)
                     ORDER BY p.id DESC
-                """)
+                """),
+                {
+                    "administrador": administrador,
+                    "cliente_id": cliente_autenticado["id"]
+                }
             )
 
             return [
@@ -206,7 +213,7 @@ def listar_pedidos():
         )
 
 
-def consultar_pedido(pedido_id: int):
+def consultar_pedido(pedido_id: int, cliente_autenticado: dict):
     try:
         with engine.connect() as conexao:
             resultado = conexao.execute(
@@ -232,6 +239,15 @@ def consultar_pedido(pedido_id: int):
                 raise HTTPException(
                     status_code=404,
                     detail="Pedido nao encontrado"
+                )
+
+            if (
+                cliente_autenticado["perfil"] != "admin"
+                and pedido["cliente_id"] != cliente_autenticado["id"]
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Voce nao tem permissao para consultar este pedido"
                 )
 
             resultado_itens = conexao.execute(
