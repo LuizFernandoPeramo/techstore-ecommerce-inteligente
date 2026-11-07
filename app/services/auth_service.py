@@ -73,7 +73,8 @@ def consultar_cliente_autenticado(cliente_id: int):
                         email,
                         telefone,
                         cpf,
-                        ativo
+                        ativo,
+                        perfil
                     FROM clientes
                     WHERE id = :cliente_id
                       AND ativo = TRUE

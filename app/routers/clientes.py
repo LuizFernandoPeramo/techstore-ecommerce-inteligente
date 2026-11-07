@@ -1,7 +1,10 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
-from app.routers.auth import obter_cliente_autenticado
+from app.core.permissions import (
+    exigir_administrador,
+    exigir_proprietario_ou_administrador
+)
 from app.schemas.cliente import Cliente, ClienteCadastro
 from app.services import cliente_service
 
@@ -12,28 +15,20 @@ router = APIRouter(
 )
 
 
-def verificar_proprietario(
-    cliente_id: int,
-    cliente_autenticado: dict = Depends(
-        obter_cliente_autenticado
-    )
-):
-    if cliente_autenticado["id"] != cliente_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Voce nao tem permissao para alterar esta conta"
-        )
-
-    return cliente_autenticado
-
-
 @router.get("", response_model=list[Cliente])
-def listar_clientes():
+def listar_clientes(
+    administrador: dict = Depends(exigir_administrador)
+):
     return cliente_service.listar_clientes()
 
 
 @router.get("/{cliente_id}", response_model=Cliente)
-def consultar_cliente(cliente_id: int):
+def consultar_cliente(
+    cliente_id: int,
+    usuario: dict = Depends(
+        exigir_proprietario_ou_administrador
+    )
+):
     return cliente_service.consultar_cliente(cliente_id)
 
 
@@ -46,15 +41,12 @@ def cadastrar_cliente(cliente: ClienteCadastro):
     return cliente_service.cadastrar_cliente(cliente)
 
 
-@router.put(
-    "/{cliente_id}",
-    response_model=Cliente
-)
+@router.put("/{cliente_id}", response_model=Cliente)
 def atualizar_cliente(
     cliente_id: int,
     cliente: ClienteCadastro,
-    cliente_autenticado: dict = Depends(
-        verificar_proprietario
+    usuario: dict = Depends(
+        exigir_proprietario_ou_administrador
     )
 ):
     return cliente_service.atualizar_cliente(
@@ -66,8 +58,8 @@ def atualizar_cliente(
 @router.delete("/{cliente_id}")
 def excluir_cliente(
     cliente_id: int,
-    cliente_autenticado: dict = Depends(
-        verificar_proprietario
+    usuario: dict = Depends(
+        exigir_proprietario_ou_administrador
     )
 ):
     return cliente_service.excluir_cliente(cliente_id)
