@@ -7,7 +7,8 @@ from app.schemas.carrinho import (
     ItemCarrinhoAtualizacao,
     ItemCarrinhoCadastro,
 )
-from app.services import carrinho_service
+from app.schemas.pedido import PedidoResposta
+from app.services import carrinho_service, checkout_service
 
 
 router = APIRouter(
@@ -16,7 +17,10 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=CarrinhoResposta)
+@router.get(
+    "",
+    response_model=CarrinhoResposta
+)
 def consultar_carrinho(
     cliente_autenticado: dict = Depends(obter_cliente_autenticado)
 ):
@@ -71,10 +75,26 @@ def remover_item(
     )
 
 
-@router.delete("", response_model=CarrinhoResposta)
+@router.delete(
+    "",
+    response_model=CarrinhoResposta
+)
 def esvaziar_carrinho(
     cliente_autenticado: dict = Depends(obter_cliente_autenticado)
 ):
     return carrinho_service.esvaziar_carrinho(
+        cliente_id=cliente_autenticado["id"]
+    )
+
+
+@router.post(
+    "/checkout",
+    response_model=PedidoResposta,
+    status_code=status.HTTP_201_CREATED
+)
+def finalizar_compra(
+    cliente_autenticado: dict = Depends(obter_cliente_autenticado)
+):
+    return checkout_service.finalizar_compra(
         cliente_id=cliente_autenticado["id"]
     )
