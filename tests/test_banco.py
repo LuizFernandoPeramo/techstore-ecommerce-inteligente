@@ -35,6 +35,7 @@ def test_tabelas_banco_testes(test_engine):
             "clientes",
             "itens_carrinho",
             "itens_pedido",
+            "pagamentos",
             "pedidos",
             "produtos"
         ]

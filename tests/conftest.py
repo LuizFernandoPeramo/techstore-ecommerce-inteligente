@@ -60,6 +60,7 @@ def limpar_banco_testes(test_engine):
         conexao.execute(
             text("""
                 TRUNCATE TABLE
+                    pagamentos,
                     itens_carrinho,
                     carrinhos,
                     itens_pedido,
@@ -77,6 +78,7 @@ def banco_limpo(test_engine):
 
     try:
         yield
+
     finally:
         limpar_banco_testes(test_engine)
 
@@ -89,42 +91,24 @@ def client(test_engine, monkeypatch):
     import app.services.auth_service as auth_service
     import app.services.carrinho_service as carrinho_service
     import app.services.checkout_service as checkout_service
+    import app.services.pagamento_service as pagamento_service
 
-    monkeypatch.setattr(
+    services = (
         produto_service,
-        "engine",
-        test_engine
-    )
-
-    monkeypatch.setattr(
         cliente_service,
-        "engine",
-        test_engine
-    )
-
-    monkeypatch.setattr(
         pedido_service,
-        "engine",
-        test_engine
-    )
-
-    monkeypatch.setattr(
         auth_service,
-        "engine",
-        test_engine
-    )
-
-    monkeypatch.setattr(
         carrinho_service,
-        "engine",
-        test_engine
+        checkout_service,
+        pagamento_service
     )
 
-    monkeypatch.setattr(
-        checkout_service,
-        "engine",
-        test_engine
-    )
+    for service in services:
+        monkeypatch.setattr(
+            service,
+            "engine",
+            test_engine
+        )
 
     from app.main import app
 
