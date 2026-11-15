@@ -1,4 +1,3 @@
-
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -10,8 +9,8 @@ from app.schemas.pedido import PedidoCadastro
 
 
 TRANSICOES_PERMITIDAS = {
-    "pendente": {"pago", "cancelado"},
-    "pago": {"enviado", "cancelado"},
+    "pendente": {"cancelado"},
+    "pago": {"enviado"},
     "enviado": {"entregue"},
     "entregue": set(),
     "cancelado": set()
@@ -332,6 +331,34 @@ def atualizar_status_pedido(pedido_id: int, novo_status: str):
                 )
 
             if novo_status == "cancelado":
+                pagamento_aprovado = conexao.execute(
+                    text("""
+                        SELECT id
+                        FROM pagamentos
+                        WHERE pedido_id = :pedido_id
+                          AND status = 'aprovado'
+                        LIMIT 1
+                    """),
+                    {"pedido_id": pedido_id}
+                ).first()
+
+                if pagamento_aprovado is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Pedido com pagamento aprovado exige reembolso"
+                    )
+
+                conexao.execute(
+                    text("""
+                        UPDATE pagamentos
+                        SET status = 'cancelado',
+                            atualizado_em = CURRENT_TIMESTAMP
+                        WHERE pedido_id = :pedido_id
+                          AND status = 'pendente'
+                    """),
+                    {"pedido_id": pedido_id}
+                )
+
                 itens = conexao.execute(
                     text("""
                         SELECT produto_id, quantidade

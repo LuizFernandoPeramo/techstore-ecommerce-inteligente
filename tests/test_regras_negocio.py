@@ -259,7 +259,7 @@ def test_validacao_dados_pedido(
     assert resposta.status_code == 422
 
 
-def test_cancelamento_pedido_pago_devolve_estoque(
+def test_cancelamento_pedido_pago_bloqueado_sem_reembolso(
     client,
     test_engine,
     banco_limpo,
@@ -269,31 +269,46 @@ def test_cancelamento_pedido_pago_devolve_estoque(
     produto_id = criar_produto(client, headers_admin_regras, estoque=10)
 
     resposta_pedido = criar_pedido(
-        client,
-        cliente_id,
-        produto_id,
-        headers_admin_regras,
-        quantidade=4
+        client, cliente_id, produto_id, headers_admin_regras, quantidade=4
     )
-
-    assert resposta_pedido.status_code == 201
+    assert resposta_pedido.status_code == 201, resposta_pedido.text
     pedido_id = resposta_pedido.json()["id"]
-
     assert consultar_estoque(test_engine, produto_id) == 6
 
-    resposta_pagamento = client.patch(
+    pagamento = client.post(
+        "/pagamentos",
+        json={"pedido_id": pedido_id, "metodo": "pix"},
+        headers=headers_admin_regras,
+    )
+    assert pagamento.status_code == 201, pagamento.text
+
+    aprovacao = client.post(
+        f"/pagamentos/{pagamento.json()['id']}/simular",
+        json={"resultado": "aprovado"},
+        headers=headers_admin_regras,
+    )
+    assert aprovacao.status_code == 200, aprovacao.text
+
+    cancelamento = client.patch(
         f"/pedidos/{pedido_id}/status",
-        json={"status": "pago"}, headers=headers_admin_regras)
+        json={"status": "cancelado"},
+        headers=headers_admin_regras,
+    )
+    assert cancelamento.status_code == 409, cancelamento.text
+    assert consultar_estoque(test_engine, produto_id) == 6
 
-    assert resposta_pagamento.status_code == 200
+    consulta = client.get(
+        f"/pedidos/{pedido_id}", headers=headers_admin_regras
+    )
+    assert consulta.status_code == 200, consulta.text
+    assert consulta.json()["status"] == "pago"
 
-    resposta_cancelamento = client.patch(
-        f"/pedidos/{pedido_id}/status",
-        json={"status": "cancelado"}, headers=headers_admin_regras)
-
-    assert resposta_cancelamento.status_code == 200
-    assert resposta_cancelamento.json()["status"] == "cancelado"
-    assert consultar_estoque(test_engine, produto_id) == 10
+    with test_engine.connect() as conexao:
+        status_pagamento = conexao.execute(
+            text("SELECT status FROM pagamentos WHERE id = :id"),
+            {"id": pagamento.json()["id"]},
+        ).scalar_one()
+    assert status_pagamento == "aprovado"
 
 
 def test_pedido_enviado_nao_pode_ser_cancelado(
@@ -306,33 +321,93 @@ def test_pedido_enviado_nao_pode_ser_cancelado(
     produto_id = criar_produto(client, headers_admin_regras, estoque=10)
 
     resposta_pedido = criar_pedido(
-        client,
-        cliente_id,
-        produto_id,
-        headers_admin_regras,
-        quantidade=2
+        client, cliente_id, produto_id, headers_admin_regras, quantidade=2
     )
-
-    assert resposta_pedido.status_code == 201
+    assert resposta_pedido.status_code == 201, resposta_pedido.text
     pedido_id = resposta_pedido.json()["id"]
 
-    for status in ["pago", "enviado"]:
-        resposta = client.patch(
-            f"/pedidos/{pedido_id}/status",
-            json={"status": status}, headers=headers_admin_regras)
-        assert resposta.status_code == 200
+    pagamento = client.post(
+        "/pagamentos",
+        json={"pedido_id": pedido_id, "metodo": "pix"},
+        headers=headers_admin_regras,
+    )
+    assert pagamento.status_code == 201, pagamento.text
 
-    resposta_cancelamento = client.patch(
+    aprovacao = client.post(
+        f"/pagamentos/{pagamento.json()['id']}/simular",
+        json={"resultado": "aprovado"},
+        headers=headers_admin_regras,
+    )
+    assert aprovacao.status_code == 200, aprovacao.text
+
+    envio = client.patch(
         f"/pedidos/{pedido_id}/status",
-        json={"status": "cancelado"}, headers=headers_admin_regras)
+        json={"status": "enviado"},
+        headers=headers_admin_regras,
+    )
+    assert envio.status_code == 200, envio.text
 
-    assert resposta_cancelamento.status_code == 409
+    cancelamento = client.patch(
+        f"/pedidos/{pedido_id}/status",
+        json={"status": "cancelado"},
+        headers=headers_admin_regras,
+    )
+    assert cancelamento.status_code == 409, cancelamento.text
     assert consultar_estoque(test_engine, produto_id) == 8
 
-    resposta_consulta = client.get(f"/pedidos/{pedido_id}", headers=headers_admin_regras)
+    consulta = client.get(
+        f"/pedidos/{pedido_id}", headers=headers_admin_regras
+    )
+    assert consulta.status_code == 200, consulta.text
+    assert consulta.json()["status"] == "enviado"
 
-    assert resposta_consulta.status_code == 200
-    assert resposta_consulta.json()["status"] == "enviado"
+
+def test_cancelamento_pendente_cancela_pagamento_e_devolve_estoque(
+    client,
+    test_engine,
+    banco_limpo,
+    headers_admin_regras
+):
+    cliente_id = criar_cliente(client)
+    produto_id = criar_produto(client, headers_admin_regras, estoque=10)
+    pedido = criar_pedido(
+        client, cliente_id, produto_id, headers_admin_regras, quantidade=3
+    )
+    assert pedido.status_code == 201, pedido.text
+    pedido_id = pedido.json()["id"]
+    assert consultar_estoque(test_engine, produto_id) == 7
+
+    pagamento = client.post(
+        "/pagamentos",
+        json={"pedido_id": pedido_id, "metodo": "pix"},
+        headers=headers_admin_regras,
+    )
+    assert pagamento.status_code == 201, pagamento.text
+    pagamento_id = pagamento.json()["id"]
+
+    cancelamento = client.patch(
+        f"/pedidos/{pedido_id}/status",
+        json={"status": "cancelado"},
+        headers=headers_admin_regras,
+    )
+    assert cancelamento.status_code == 200, cancelamento.text
+    assert cancelamento.json()["status"] == "cancelado"
+    assert consultar_estoque(test_engine, produto_id) == 10
+
+    with test_engine.connect() as conexao:
+        status_pagamento = conexao.execute(
+            text("SELECT status FROM pagamentos WHERE id = :id"),
+            {"id": pagamento_id},
+        ).scalar_one()
+    assert status_pagamento == "cancelado"
+
+    aprovacao = client.post(
+        f"/pagamentos/{pagamento_id}/simular",
+        json={"resultado": "aprovado"},
+        headers=headers_admin_regras,
+    )
+    assert aprovacao.status_code == 409, aprovacao.text
+    assert consultar_estoque(test_engine, produto_id) == 10
 
 
 def test_status_pedido_inexistente(client, banco_limpo, headers_admin_regras):

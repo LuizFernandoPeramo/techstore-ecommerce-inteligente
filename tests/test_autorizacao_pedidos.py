@@ -215,12 +215,34 @@ def test_administrador_consulta_pedido_de_cliente(client, contexto_pedidos):
 def test_administrador_altera_status_pedido(client, contexto_pedidos):
     contexto = contexto_pedidos
     pedido = criar_pedido(client, contexto)
-    resposta = client.patch(
+
+    alteracao_direta = client.patch(
         f"/pedidos/{pedido['id']}/status",
         json={"status": "pago"},
+        headers=contexto["headers_admin"],
+    )
+    assert alteracao_direta.status_code == 409, alteracao_direta.text
+
+    pagamento = client.post(
+        "/pagamentos",
+        json={"pedido_id": pedido["id"], "metodo": "pix"},
+        headers=contexto["headers_admin"],
+    )
+    assert pagamento.status_code == 201, pagamento.text
+
+    aprovacao = client.post(
+        f"/pagamentos/{pagamento.json()['id']}/simular",
+        json={"resultado": "aprovado"},
+        headers=contexto["headers_admin"],
+    )
+    assert aprovacao.status_code == 200, aprovacao.text
+
+    resposta = client.patch(
+        f"/pedidos/{pedido['id']}/status",
+        json={"status": "enviado"},
         headers=contexto["headers_admin"],
     )
     assert resposta.status_code == 200, resposta.text
     consulta = client.get(f"/pedidos/{pedido['id']}", headers=contexto["headers_admin"])
     assert consulta.status_code == 200, consulta.text
-    assert consulta.json()["status"] == "pago"
+    assert consulta.json()["status"] == "enviado"
